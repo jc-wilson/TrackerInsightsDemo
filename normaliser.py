@@ -1,6 +1,7 @@
 import helpers
 import data_loader
 
+# Builds a list of match dicts
 def build_match_rows(match_data_path, puuid_data_path):
     match_rows = []
     matches_list = data_loader.load_match_data(match_data_path)
@@ -36,16 +37,16 @@ def build_match_rows(match_data_path, puuid_data_path):
                 for team in match["teams"]:
                     if team["teamId"] == match_row["team"]:
                         if team["won"]:
-                            match_row["result"] = "Won"
+                            match_row["result"] = "won"
                         else:
                             team_rounds.append(team["roundsWon"])
                     else:
                         team_rounds.append(team["roundsWon"])
-                if len(team_rounds) == 2 and match_row["result"] != "Won":
+                if len(team_rounds) == 2 and match_row["result"] != "won":
                     if team_rounds[0] == team_rounds[1]:
-                        match_row["result"] = "Draw"
+                        match_row["result"] = "draw"
                     else:
-                        match_row["result"] = "Lost"
+                        match_row["result"] = "lost"
 
                 # Adds target player's teammates and party members to lists
                 teammates = []
@@ -67,6 +68,7 @@ def build_match_rows(match_data_path, puuid_data_path):
 
     return match_rows
 
+# Builds a list of round dicts
 def build_round_rows(match_data_path, puuid_data_path):
     round_rows = []
 
@@ -104,16 +106,16 @@ def build_round_rows(match_data_path, puuid_data_path):
                         for team in match["teams"]:
                             if team["teamId"] == match_info["team"]:
                                 if team["won"]:
-                                    match_info["match_result"] = "Won"
+                                    match_info["match_result"] = "won"
                                 else:
                                     team_rounds.append(team["roundsWon"])
                             else:
                                 team_rounds.append(team["roundsWon"])
-                        if len(team_rounds) == 2 and match_info["match_result"] != "Won":
+                        if len(team_rounds) == 2 and match_info["match_result"] != "won":
                             if team_rounds[0] == team_rounds[1]:
-                                match_info["match_result"] = "Draw"
+                                match_info["match_result"] = "draw"
                             else:
-                                match_info["match_result"] = "Lost"
+                                match_info["match_result"] = "lost"
 
                 for round in match["roundResults"]:
                     round_row = {

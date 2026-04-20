@@ -1,6 +1,7 @@
 from helpers import is_uuid
 from helpers import load_json_file
 
+# Returns puuid from puuid_data.json based on index (defaults to 0)
 def load_target_puuid(path, index=0):
     puuids = load_json_file(path)
     # Checks if puuids is a list
@@ -18,6 +19,7 @@ def load_target_puuid(path, index=0):
     else:
         raise Exception("PUUID data is in unexpected format")
 
+# Safely loads match data from match_data.json
 def load_match_data(path):
     matches = load_json_file(path)
     # Checks if match data is empty
