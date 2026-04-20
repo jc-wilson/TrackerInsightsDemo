@@ -13,7 +13,7 @@ def uuid_to_display_name(value, category):
     if is_uuid(value):
         data = load_json_file(f"{category}_uuids.json")
         for key in data["data"]:
-            if key["uuid"] == str(value).lower():
+            if str(key["uuid"]).lower() == str(value).lower():
                 return key["displayName"]
         return None
     else:
@@ -46,3 +46,10 @@ def server_normaliser(value):
         return server[4].capitalize()
     else:
         return None
+
+def opposite_side(side):
+    if side == "Attacker":
+        return "Defender"
+    if side == "Defender":
+        return "Attacker"
+    return None
