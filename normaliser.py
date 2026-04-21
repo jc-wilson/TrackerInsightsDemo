@@ -1,5 +1,6 @@
 import helpers
 import data_loader
+from datetime import datetime
 
 # Builds a list of match dicts
 def build_match_rows(match_data_path, puuid_data_path):
@@ -14,15 +15,19 @@ def build_match_rows(match_data_path, puuid_data_path):
                     "match_id": match["matchInfo"]["matchId"],
                     "started_at": match["matchInfo"]["gameStartMillis"],
                     "ended_at": match["matchInfo"]["gameStartMillis"] + match["matchInfo"]["gameLengthMillis"],
+                    "hour": int(datetime.fromtimestamp(int(match["matchInfo"]["gameStartMillis"]) / 1000).strftime("%H")),
+                    "time": None,
                     "map": helpers.map_url_to_display_name(match["matchInfo"]["mapId"]),
                     "result": None,
+                    "won": False,
                     "team": player["teamId"],
                     "server": helpers.server_normaliser(match["matchInfo"]["gamePodId"]),
                     "agent_id": player["characterId"],
-                    "agent_name": helpers.uuid_to_display_name(player["characterId"], "agent"),
+                    "agent": helpers.uuid_to_display_name(player["characterId"], "agent"),
                     "role": helpers.agent_to_role(player["characterId"]),
                     "party_id": player["partyId"],
                     "party_members": [],
+                    "solo_queue": True,
                     "kills": player["stats"]["kills"],
                     "deaths": player["stats"]["deaths"],
                     "assists": player["stats"]["assists"],
@@ -32,12 +37,22 @@ def build_match_rows(match_data_path, puuid_data_path):
                     "abilities": player["stats"]["abilityCasts"],
                 }
 
+                if 0 <= match_row["hour"] < 6:
+                    match_row["time"] = "00-06"
+                elif 6 <= match_row["hour"] < 12:
+                    match_row["time"] = "06-12"
+                elif 12 <= match_row["hour"] < 18:
+                    match_row["time"] = "12-18"
+                elif 18 <= match_row["hour"] < 24:
+                    match_row["time"] = "18-00"
+
                 # Checks if target player won, drew, or lost game
                 team_rounds = []
                 for team in match["teams"]:
                     if team["teamId"] == match_row["team"]:
                         if team["won"]:
                             match_row["result"] = "won"
+                            match_row["won"] = True
                         else:
                             team_rounds.append(team["roundsWon"])
                     else:
@@ -57,6 +72,8 @@ def build_match_rows(match_data_path, puuid_data_path):
                     if player2["teamId"] == match_row["team"]:
                         teammates.append(player2["subject"])
 
+                if match_row["party_members"]:
+                    match_row["solo_queue"] = False
 
                 dealt_damage = 0
                 for damage in player["roundDamage"]:
@@ -89,6 +106,7 @@ def build_round_rows(match_data_path, puuid_data_path):
                     "role": helpers.agent_to_role(player["characterId"]),
                     "team": player["teamId"],
                     "party_id": player["partyId"],
+                    "solo_queue": True,
                     "teammates": [],
                     "party_members": []
                 }
@@ -117,6 +135,9 @@ def build_round_rows(match_data_path, puuid_data_path):
                             else:
                                 match_info["match_result"] = "lost"
 
+                if match_info["party_members"]:
+                    match_info["solo_queue"] = False
+
                 for round in match["roundResults"]:
                     round_row = {
                         "match_id": match_info["match_id"],
@@ -124,10 +145,13 @@ def build_round_rows(match_data_path, puuid_data_path):
                         "server": match_info["server"],
                         "map": match_info["map"],
                         "agent_id": match_info["agent_id"],
-                        "agent_name": match_info["agent_name"],
+                        "agent": match_info["agent_name"],
                         "role": match_info["role"],
+                        "solo_queue": match_info["solo_queue"],
+                        "teammates": match_info["teammates"],
+                        "party_members": match_info["party_members"],
                         "round_number": round["roundNum"] + 1,
-                        "won_round": True if round["winningTeam"] == match_info["team"] else False,
+                        "won": True if round["winningTeam"] == match_info["team"] else False,
                         "round_outcome": round["roundResult"],
                         "round_ceremony": round["roundCeremony"],
                         "spike_planted": True if "bombPlanter" in round.keys() else False,
@@ -154,7 +178,8 @@ def build_round_rows(match_data_path, puuid_data_path):
                         "money_spent": None,
                         "money_remaining": None,
                         "loadout_value": None,
-                        "weapon_name": None,
+                        "enemy_team_loadout_value": 0,
+                        "weapon": None,
                         "weapon_id": None,
                         "armour_name": None,
                         "armour_id": None,
@@ -162,7 +187,8 @@ def build_round_rows(match_data_path, puuid_data_path):
                         "kill_weapon_names": [],
                         "death_weapon_ids": [],
                         "death_weapon_names": [],
-                        "was_afk": None
+                        "was_afk": None,
+                        "rating_context": {}
                     }
 
                     for player3 in round["playerStats"]:
@@ -171,6 +197,9 @@ def build_round_rows(match_data_path, puuid_data_path):
                                 round_row["took_opening_duel"] = True
                             else:
                                 round_row["took_opening_duel"] = False
+
+                        if player3["subject"] not in match_info["teammates"]:
+                            round_row["enemy_team_loadout_value"] += player3["economy"]["loadoutValue"]
 
                         if player3["kills"]:
                             for kill in player3["kills"]:
@@ -216,7 +245,7 @@ def build_round_rows(match_data_path, puuid_data_path):
                             round_row["money_spent"] = player3["economy"]["spent"]
                             round_row["money_before_buy"] = player3["economy"]["spent"] + player3["economy"]["remaining"]
 
-                            round_row["weapon_name"] = helpers.uuid_to_display_name(round_row["weapon_id"], "weapon")
+                            round_row["weapon"] = helpers.uuid_to_display_name(round_row["weapon_id"], "weapon")
                             round_row["armour_name"] = helpers.uuid_to_display_name(round_row["armour_id"], "armour")
 
                             for weapon in round_row["kill_weapon_ids"]:

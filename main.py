@@ -1,3 +1,3 @@
 import insight_calculator
 
-insight_calculator.party_vs_baseline()
+insight_calculator.run_all_insights("attack", only_significant=True)
