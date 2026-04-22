@@ -23,7 +23,7 @@ def build_match_rows(match_data_path, puuid_data_path):
                     "team": player["teamId"],
                     "server": helpers.server_normaliser(match["matchInfo"]["gamePodId"]),
                     "agent_id": player["characterId"],
-                    "agent": helpers.uuid_to_display_name(player["characterId"], "agent"),
+                    "agent": helpers.uuid_to_display_name(player["characterId"]),
                     "role": helpers.agent_to_role(player["characterId"]),
                     "party_id": player["partyId"],
                     "party_members": [],
@@ -102,7 +102,7 @@ def build_round_rows(match_data_path, puuid_data_path):
                     "server": helpers.server_normaliser(match["matchInfo"]["gamePodId"]),
                     "map": helpers.map_url_to_display_name(match["matchInfo"]["mapId"]),
                     "agent_id": player["characterId"],
-                    "agent_name": helpers.uuid_to_display_name(player["characterId"], "agent"),
+                    "agent_name": helpers.uuid_to_display_name(player["characterId"]),
                     "role": helpers.agent_to_role(player["characterId"]),
                     "team": player["teamId"],
                     "party_id": player["partyId"],
@@ -171,9 +171,9 @@ def build_round_rows(match_data_path, puuid_data_path):
                         "damage": 0,
                         "received_damage": 0,
                         "score": None,
-                        "took_opening_duel": None,
+                        "took_opening_duel": True if round["firstBloodPlayer"] == target_puuid else False,
                         "won_opening_duel": True if round["firstBloodPlayer"] == target_puuid else False,
-                        "traded": None,
+                        "traded": False,
                         "money_before_buy": None,
                         "money_spent": None,
                         "money_remaining": None,
@@ -191,6 +191,9 @@ def build_round_rows(match_data_path, puuid_data_path):
                         "rating_context": {}
                     }
 
+                    death_times = []
+                    killers = []
+
                     for player3 in round["playerStats"]:
                         if player3["subject"] not in match_info["teammates"] and player3["subject"] == round["firstBloodPlayer"]:
                             if player3["kills"][0]["victim"] == target_puuid:
@@ -205,6 +208,8 @@ def build_round_rows(match_data_path, puuid_data_path):
                             for kill in player3["kills"]:
                                 if kill["victim"] == target_puuid:
                                     round_row["deaths"] += 1
+                                    death_times.append(kill["gameTime"])
+                                    killers.append(kill["killer"])
                                     round_row["death_weapon_ids"].append(kill["finishingDamage"]["damageItem"])
                                 if target_puuid in kill["assistants"] and kill["victim"] not in match_info["teammates"]:
                                     round_row["assists"] += 1
@@ -245,17 +250,27 @@ def build_round_rows(match_data_path, puuid_data_path):
                             round_row["money_spent"] = player3["economy"]["spent"]
                             round_row["money_before_buy"] = player3["economy"]["spent"] + player3["economy"]["remaining"]
 
-                            round_row["weapon"] = helpers.uuid_to_display_name(round_row["weapon_id"], "weapon")
-                            round_row["armour_name"] = helpers.uuid_to_display_name(round_row["armour_id"], "armour")
+                            round_row["weapon"] = helpers.uuid_to_display_name(round_row["weapon_id"])
+                            round_row["armour_name"] = helpers.uuid_to_display_name(round_row["armour_id"])
 
                             for weapon in round_row["kill_weapon_ids"]:
-                                round_row["kill_weapon_names"].append(helpers.uuid_to_display_name(weapon, "weapon"))
+                                round_row["kill_weapon_names"].append(helpers.uuid_to_display_name(weapon))
                             for weapon in round_row["death_weapon_ids"]:
-                                round_row["death_weapon_names"].append(helpers.uuid_to_display_name(weapon, "weapon"))
+                                round_row["death_weapon_names"].append(helpers.uuid_to_display_name(weapon))
 
                             if round_row["won_opening_duel"] == True:
                                 round_row["took_opening_duel"] = True
 
-                            round_rows.append(round_row)
+                    if death_times and killers:
+                        for index, death in enumerate(death_times):
+                            if killers[index] not in round_row["teammates"]:
+                                for player4 in round["playerStats"]:
+                                    if player4["subject"] in round_row["teammates"]:
+                                        for kill in player4["kills"]:
+                                            if kill["victim"] == killers[index]:
+                                                if (kill["gameTime"] - death) < 3000:
+                                                    round_row["traded"] = True
+
+                    round_rows.append(round_row)
         continue
     return round_rows

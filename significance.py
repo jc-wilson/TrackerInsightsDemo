@@ -30,7 +30,7 @@ def calculate_z_score(group_rate, baseline_rate, standard_error):
     else:
         return (group_rate - baseline_rate) / standard_error
 
-def compare_to_baseline(wins, total, baseline_wins, baseline_total, significance_threshold=1, minimum_sample_size=20):
+def compare_to_baseline(wins, total, baseline_wins, baseline_total, group_by, value, baseline, significance_threshold=1, minimum_sample_size=20):
     win_rate = calculate_win_rate(wins, total)
     baseline_win_rate = calculate_win_rate(baseline_wins, baseline_total)
 
@@ -46,6 +46,9 @@ def compare_to_baseline(wins, total, baseline_wins, baseline_total, significance
         significance = "neutral"
 
     return {
+        "group_by": group_by,
+        "value": value,
+        "baseline": baseline,
         "wins": wins,
         "losses": total - wins,
         "sample_size": total,
@@ -58,7 +61,7 @@ def compare_to_baseline(wins, total, baseline_wins, baseline_total, significance
         "low_sample": total < minimum_sample_size
     }
 
-def compare_two_groups(wins_a, total_a, wins_b, total_b, significance_threshold=1, minimum_sample_size=20):
+def compare_two_groups(wins_a, total_a, wins_b, total_b, group_by, baseline, stat_a, stat_b, significance_threshold=1, minimum_sample_size=20):
     win_rate_a = calculate_win_rate(wins_a, total_a)
     win_rate_b = calculate_win_rate(wins_b, total_b)
 
@@ -74,13 +77,17 @@ def compare_two_groups(wins_a, total_a, wins_b, total_b, significance_threshold=
         significance = "neutral"
 
     return {
+        "group_by": group_by,
+        "baseline": baseline,
+        "stat_a": stat_a,
+        "stat_b": stat_b,
         "wins_a": wins_a,
-        "losses_a": total_a - wins_a,
-        "sample_size_a": total_a,
-        "win_rate_a": win_rate_a,
         "wins_b": wins_b,
+        "losses_a": total_a - wins_a,
         "losses_b": total_b - wins_b,
+        "sample_size_a": total_a,
         "sample_size_b": total_b,
+        "win_rate_a": win_rate_a,
         "win_rate_b": win_rate_b,
         "difference": win_rate_a - win_rate_b,
         "standard_error": standard_error,
