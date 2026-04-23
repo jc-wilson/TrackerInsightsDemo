@@ -23,7 +23,6 @@ def calculate_two_group_standard_error(rate_a, total_a, rate_b, total_b):
         standard_error = math.sqrt(variance_a + variance_b)
         return standard_error
 
-
 def calculate_z_score(group_rate, baseline_rate, standard_error):
     if standard_error == 0:
         return 0

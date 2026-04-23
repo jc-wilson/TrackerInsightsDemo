@@ -93,7 +93,6 @@ def build_round_rows(match_data_path, puuid_data_path):
     target_puuid = data_loader.load_target_puuid(puuid_data_path)
 
     for match in matches_list:
-        match_info = {}
         for player in match["players"]:
             if player["subject"] == target_puuid:
                 match_info = {
@@ -102,7 +101,7 @@ def build_round_rows(match_data_path, puuid_data_path):
                     "server": helpers.server_normaliser(match["matchInfo"]["gamePodId"]),
                     "map": helpers.map_url_to_display_name(match["matchInfo"]["mapId"]),
                     "agent_id": player["characterId"],
-                    "agent_name": helpers.uuid_to_display_name(player["characterId"]),
+                    "agent": helpers.uuid_to_display_name(player["characterId"]),
                     "role": helpers.agent_to_role(player["characterId"]),
                     "team": player["teamId"],
                     "party_id": player["partyId"],
@@ -145,7 +144,7 @@ def build_round_rows(match_data_path, puuid_data_path):
                         "server": match_info["server"],
                         "map": match_info["map"],
                         "agent_id": match_info["agent_id"],
-                        "agent": match_info["agent_name"],
+                        "agent": match_info["agent"],
                         "role": match_info["role"],
                         "solo_queue": match_info["solo_queue"],
                         "teammates": match_info["teammates"],
@@ -195,15 +194,18 @@ def build_round_rows(match_data_path, puuid_data_path):
                     killers = []
 
                     for player3 in round["playerStats"]:
+                        # Determines whether player took and/or won the opening duel.
                         if player3["subject"] not in match_info["teammates"] and player3["subject"] == round["firstBloodPlayer"]:
                             if player3["kills"][0]["victim"] == target_puuid:
                                 round_row["took_opening_duel"] = True
                             else:
                                 round_row["took_opening_duel"] = False
 
+                        # Tallies enemy team's loadout value
                         if player3["subject"] not in match_info["teammates"]:
                             round_row["enemy_team_loadout_value"] += player3["economy"]["loadoutValue"]
 
+                        # Tallies player's deaths and also records death time and their killer for later trade status determination
                         if player3["kills"]:
                             for kill in player3["kills"]:
                                 if kill["victim"] == target_puuid:
@@ -213,6 +215,7 @@ def build_round_rows(match_data_path, puuid_data_path):
                                     round_row["death_weapon_ids"].append(kill["finishingDamage"]["damageItem"])
                                 if target_puuid in kill["assistants"] and kill["victim"] not in match_info["teammates"]:
                                     round_row["assists"] += 1
+                        # Tallies the player's received damage, legshots, bodyshots, and headshots
                         if player3["damage"]:
                             if player3["damage"]:
                                 for damage in player3["damage"]:
@@ -222,7 +225,7 @@ def build_round_rows(match_data_path, puuid_data_path):
                                         round_row["received_bodyshots"] += damage["bodyshots"]
                                         round_row["received_legshots"] += damage["legshots"]
 
-
+                        # Tallies player's kills, damage, legshots, bodyshots, and headshots
                         if player3["subject"] == target_puuid:
                             if player3["kills"]:
                                 for kill in player3["kills"]:
@@ -237,6 +240,7 @@ def build_round_rows(match_data_path, puuid_data_path):
                                         round_row["bodyshots"] += damage["bodyshots"]
                                         round_row["legshots"] += damage["legshots"]
 
+                            # Determines if player was AFK during this round or not
                             if player3["wasAfk"]:
                                 round_row["was_afk"] = True
                             else:
@@ -261,6 +265,7 @@ def build_round_rows(match_data_path, puuid_data_path):
                             if round_row["won_opening_duel"] == True:
                                 round_row["took_opening_duel"] = True
 
+                    # Determines if player was traded within 3 seconds or not
                     if death_times and killers:
                         for index, death in enumerate(death_times):
                             if killers[index] not in round_row["teammates"]:

@@ -44,4 +44,4 @@ This writes:
 ## Notes
 
 - `puuid_data.json` should contain a list of player PUUIDs; the first one is used by default.
-- `main.py` currently runs the analysis with `baseline = "matches"` and `only_significant=False`.
+- `main.py` currently runs the analysis with `baseline = "rounds"`, `only_significant=False`, and `minimum_sample_size=50`.

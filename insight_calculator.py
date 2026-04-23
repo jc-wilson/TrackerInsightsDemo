@@ -2,6 +2,7 @@ import helpers
 import normaliser
 import significance
 
+# Builds round and match rows using match_data.json and puuid_data.json
 round_rows = normaliser.build_round_rows("match_data.json", "puuid_data.json")
 match_rows = normaliser.build_match_rows("match_data.json", "puuid_data.json")
 
@@ -16,28 +17,45 @@ baseline_groups = {
         "total": 0,
         "rows": []
     },
-    "pistol_rounds": {
+    "pistol rounds": {
         "wins": 0,
         "total": 0,
         "rows": []
     },
-    "attack_rounds": {
+    "eco rounds": {
         "wins": 0,
         "total": 0,
         "rows": []
     },
-    "defense_rounds": {
+    "semi rounds": {
         "wins": 0,
         "total": 0,
         "rows": []
     },
-    "death_rounds": {
+    "full rounds": {
+        "wins": 0,
+        "total": 0,
+        "rows": []
+    },
+    "attack rounds": {
+        "wins": 0,
+        "total": 0,
+        "rows": []
+    },
+    "defense rounds": {
+        "wins": 0,
+        "total": 0,
+        "rows": []
+    },
+    "death rounds": {
         "wins": 0,
         "total": 0,
         "rows": []
     }
 }
 
+
+# Builds baseline rows
 for match in match_rows:
     baseline_groups["matches"]["total"] += 1
     baseline_groups["matches"]["rows"].append(match)
@@ -51,44 +69,64 @@ for round in round_rows:
         baseline_groups["rounds"]["wins"] += 1
 
     if round["round_number"] in [1, 13]:
-        baseline_groups["pistol_rounds"]["total"] += 1
-        baseline_groups["pistol_rounds"]["rows"].append(round)
+        baseline_groups["pistol rounds"]["total"] += 1
+        baseline_groups["pistol rounds"]["rows"].append(round)
         if round["won"]:
-            baseline_groups["pistol_rounds"]["wins"] += 1
+            baseline_groups["pistol rounds"]["wins"] += 1
 
     if round["side"] == "Attacker":
-        baseline_groups["attack_rounds"]["total"] += 1
-        baseline_groups["attack_rounds"]["rows"].append(round)
+        baseline_groups["attack rounds"]["total"] += 1
+        baseline_groups["attack rounds"]["rows"].append(round)
         if round["won"]:
-            baseline_groups["attack_rounds"]["wins"] += 1
+            baseline_groups["attack rounds"]["wins"] += 1
 
     if round["side"] == "Defender":
-        baseline_groups["defense_rounds"]["total"] += 1
-        baseline_groups["defense_rounds"]["rows"].append(round)
+        baseline_groups["defense rounds"]["total"] += 1
+        baseline_groups["defense rounds"]["rows"].append(round)
         if round["won"]:
-            baseline_groups["defense_rounds"]["wins"] += 1
+            baseline_groups["defense rounds"]["wins"] += 1
 
     if round["deaths"]:
-        baseline_groups["death_rounds"]["total"] += 1
-        baseline_groups["death_rounds"]["rows"].append(round)
+        baseline_groups["death rounds"]["total"] += 1
+        baseline_groups["death rounds"]["rows"].append(round)
         if round["won"]:
-            baseline_groups["death_rounds"]["wins"] += 1
+            baseline_groups["death rounds"]["wins"] += 1
 
+    # Eco rounds: 0-1500
+    # Semi-buy rounds: 1501-3899
+    # Full buy rounds: 3900+
+    if round["loadout_value"] <= 1500:
+        baseline_groups["eco rounds"]["total"] += 1
+        baseline_groups["eco rounds"]["rows"].append(round)
+        if round["won"]:
+            baseline_groups["eco rounds"]["wins"] += 1
+
+    if 1500 < round["loadout_value"] < 3900:
+        baseline_groups["semi rounds"]["total"] += 1
+        baseline_groups["semi rounds"]["rows"].append(round)
+        if round["won"]:
+            baseline_groups["semi rounds"]["wins"] += 1
+
+    if 3900 <= round["loadout_value"]:
+        baseline_groups["full rounds"]["total"] += 1
+        baseline_groups["full rounds"]["rows"].append(round)
+        if round["won"]:
+            baseline_groups["full rounds"]["wins"] += 1
+
+# Available insights for matches and rounds
 match_insight_inputs = ["server", "map", "role", "agent", "solo_queue", "time"]
 round_insight_inputs = ["server", "map", "role", "agent", "solo_queue", "weapon", "took_opening_duel", "traded"]
 
-def run_all_insights(baseline, only_significant=False):
+# Runs all insight comparisons against the selected baseline
+def run_all_insights(baseline, only_significant=False, minimum_sample_size=20):
     results = []
     inputs = match_insight_inputs if baseline == "matches" else round_insight_inputs
 
     for stat in inputs:
-        results.extend(all_x_vs_baseline(stat, baseline, only_significant))
-
-    vandal_vs_phantom_results = vandal_vs_phantom(only_significant=only_significant)
-    money_spent_after_pistol_round_win_results = money_spent_after_pistol_round_win(only_significant=only_significant)
+        results.extend(all_x_vs_baseline(stat, baseline, only_significant, minimum_sample_size))
 
     if baseline == "matches":
-        fast_requeue_after_win_vs_loss_results = fast_requeue_after_win_vs_loss(minutes=10,only_significant=only_significant)
+        fast_requeue_after_win_vs_loss_results = fast_requeue_after_win_vs_loss(minutes=10, only_significant=only_significant)
         if fast_requeue_after_win_vs_loss_results:
             results.append(fast_requeue_after_win_vs_loss_results)
     else:
@@ -103,7 +141,8 @@ def run_all_insights(baseline, only_significant=False):
         insight["summary_text"] = helpers.build_summary_text(insight)
     return results
 
-def all_x_vs_baseline(group_by, baseline, only_significant=False):
+# Compares one group against all remaining rows in the baseline
+def all_x_vs_baseline(group_by, baseline, only_significant=False, minimum_sample_size=20):
     items = {}
     all_insights = []
 
@@ -135,6 +174,16 @@ def all_x_vs_baseline(group_by, baseline, only_significant=False):
         if total_a == 0 or total_b == 0:
             continue
 
+        if group_by == "time":
+            stat_a = f"{baseline} during {item}"
+            stat_b = f"{baseline} not during {item}"
+        elif group_by in ["solo_queue", "took_opening_duel", "traded"]:
+            stat_a = item
+            stat_b = not item
+        else:
+            stat_a = f"{baseline} on {item}"
+            stat_b = f"{baseline} not on {item}"
+
         insight = significance.compare_two_groups(
             wins_a,
             total_a,
@@ -142,9 +191,11 @@ def all_x_vs_baseline(group_by, baseline, only_significant=False):
             total_b,
             group_by,
             baseline,
-            item,
-            f"{baseline} not including {item}"
+            stat_a,
+            stat_b,
+            minimum_sample_size=minimum_sample_size
         )
+
         if only_significant == False:
             print(f"{group_by}: {item} {insight}")
             all_insights.append(insight)
@@ -155,7 +206,8 @@ def all_x_vs_baseline(group_by, baseline, only_significant=False):
             continue
     return all_insights
 
-def vandal_vs_phantom(only_significant=False):
+# Compares rounds in which the player started with a Vandal vs rounds in which the player started with a Phantom
+def vandal_vs_phantom(only_significant=False, minimum_sample_size=20):
     vandal_total = 0
     vandal_wins = 0
     phantom_total = 0
@@ -177,9 +229,10 @@ def vandal_vs_phantom(only_significant=False):
         phantom_wins,
         phantom_total,
         "vandal vs phantom",
-        "rounds with vandal and phantom",
+        "rounds",
         "rounds with Vandal",
-        "rounds with Phantom"
+        "rounds with Phantom",
+        minimum_sample_size=minimum_sample_size
     )
     if not only_significant:
         print(insight)
@@ -189,32 +242,34 @@ def vandal_vs_phantom(only_significant=False):
             print(insight)
             return insight
 
-def money_spent_after_pistol_round_win(only_significant=False):
-    under_1200_wins = 0
-    under_1200_total = 0
-    over_1200_wins = 0
-    over_1200_total = 0
+# Compares rounds after winning pistol round in which the player spent >1500 vs when they spent <=1500
+def money_spent_after_pistol_round_win(only_significant=False, minimum_sample_size=20):
+    under_1500_wins = 0
+    under_1500_total = 0
+    over_1500_wins = 0
+    over_1500_total = 0
 
     for index, round in enumerate(round_rows):
         if round["round_number"] in [2,14] and round_rows[index - 1]["won"]:
-            if round["money_spent"] <= 1200:
-                under_1200_total += 1
+            if round["money_spent"] <= 1500:
+                under_1500_total += 1
                 if round["won"]:
-                    under_1200_wins += 1
-            elif round["money_spent"] >= 1200:
-                over_1200_total += 1
+                    under_1500_wins += 1
+            elif round["money_spent"] > 1500:
+                over_1500_total += 1
                 if round["won"]:
-                    over_1200_wins += 1
+                    over_1500_wins += 1
 
     insight = significance.compare_two_groups(
-        under_1200_wins,
-        under_1200_total,
-        over_1200_wins,
-        over_1200_total,
+        under_1500_wins,
+        under_1500_total,
+        over_1500_wins,
+        over_1500_total,
         "money spent after winning pistol round",
-        "round after pistol round win",
-        "<1200 spent after winning pistol round",
-        ">1200 spent after winning pistol round"
+        "rounds",
+        "<=1500 spent after winning pistol round",
+        ">1500 spent after winning pistol round",
+        minimum_sample_size=minimum_sample_size
     )
     if not only_significant:
         print(insight)
@@ -224,7 +279,8 @@ def money_spent_after_pistol_round_win(only_significant=False):
             print(insight)
             return insight
 
-def fast_requeue_after_win_vs_loss(minutes=10, only_significant=False):
+# Compares matches that the player got into within x amount of minutes of winning vs losing their last match (default 10)
+def fast_requeue_after_win_vs_loss(minutes=10, only_significant=False, minimum_sample_size=20):
     after_win_wins = 0
     after_win_total = 0
     after_loss_wins = 0
@@ -254,9 +310,10 @@ def fast_requeue_after_win_vs_loss(minutes=10, only_significant=False):
         after_loss_wins,
         after_loss_total,
         f"matches started within {minutes} minutes of win or loss",
-        f"matches started within {minutes} minutes of last match",
+        f"matches",
         f"Match started within {minutes} minutes of win",
-        f"Match started within {minutes} minutes of loss"
+        f"Match started within {minutes} minutes of loss",
+        minimum_sample_size=minimum_sample_size
     )
     if not only_significant:
         print(insight)

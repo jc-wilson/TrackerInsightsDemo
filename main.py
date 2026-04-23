@@ -5,15 +5,26 @@ import helpers
 # Valid baselines:
 # "rounds"
 # "matches"
-# "pistol_rounds"
-# "attack_rounds"
-# "defense_rounds"
-# "death_rounds"
+# "pistol rounds"
+# "eco rounds"
+# "semi rounds"
+# "full rounds"
+# "attack rounds"
+# "defense rounds"
+# "death rounds"
 
-baseline = "matches"
+baseline = "rounds"
 
-# If set to True, only insights with an SD >1 will be included in the results.
+# If set to True, only non-neutral insights are exported.
 only_significant = False
 
-helpers.save_as_json(insight_calculator.run_all_insights(baseline, only_significant=only_significant))
+# Insights with a sample size below this threshold will have a "low sample" disclaimer
+minimum_sample_size = 50
+
+helpers.save_as_json(insight_calculator.run_all_insights(
+    baseline,
+    only_significant=only_significant,
+    minimum_sample_size=minimum_sample_size
+))
+
 helpers.results_to_csv("results.json")
