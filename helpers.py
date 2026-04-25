@@ -42,6 +42,10 @@ cached_data = {
     "armour": load_json_file("armour_uuids.json")
 }
 
+anchor_percentiles = {
+    "death_nearest_teammate": load_json_file("death_nearest_teammate_distance_percentile_anchors.json")
+}
+
 # UUID/map url to display name lookup dict
 lookup_table = {}
 for file in cached_data.keys():
@@ -308,3 +312,36 @@ def build_summary_text(insight):
         text += "."
 
     return text
+
+def calculate_positioning_score(map, teammate_count, distance):
+    anchors = list(anchor_percentiles["death_nearest_teammate"][map][str(teammate_count)].items())
+
+    for i, (percentile, anchor_distance) in enumerate(anchors):
+        if percentile == "n":
+            continue
+
+        next_anchor = anchors[i + 1] if i + 1 < len(anchors) else None
+        if not next_anchor:
+            return int(percentile[1:])
+
+        next_percentile, next_distance = next_anchor
+
+        if anchor_distance <= distance <= next_distance:
+            diff = next_distance - anchor_distance
+            second_diff = (distance - anchor_distance) / diff
+
+            pnum = int(percentile[1:])
+            next_pnum = int(next_percentile[1:])
+
+            return pnum + ((next_pnum - pnum) * second_diff)
+
+        elif distance < anchor_distance:
+            return int(percentile[1:])
+
+    return 99
+
+
+
+
+
+
