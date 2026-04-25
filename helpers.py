@@ -112,23 +112,41 @@ def format_value_label(group_by, value):
 
     return str(value)
 
+def format_group_stat_label(group_by, baseline, value):
+    if group_by == "death_nearest_teammate_distance_bucket":
+        return f"{baseline} with nearest teammate {value} away at death"
+
+    if group_by == "first_death_nearest_teammate_distance_bucket":
+        return f"{baseline} with nearest teammate {value} away at opening death"
+
+    return f"{baseline} on {value}"
+
 # Formats the baseline labels
 def baseline_label(baseline):
     labels = {
-        "matches": "matches",
-        "rounds": "rounds",
-        "pistol rounds": "pistol rounds",
-        "eco rounds": "eco rounds",
-        "semi rounds": "semi-buy rounds",
-        "full rounds": "full buy rounds",
-        "attack rounds": "attack rounds",
-        "defense rounds": "defense rounds",
-        "death rounds": "rounds in which they died",
-        "rounds with vandal or phantom": "rounds using either Vandal or Phantom",
+        "matches": "match",
+        "rounds": "round",
+        "pistol rounds": "pistol-round",
+        "eco rounds": "eco-round",
+        "semi rounds": "semi-buy round",
+        "semi-buy rounds": "semi-buy round",
+        "full rounds": "full-buy round",
+        "full-buy rounds": "full-buy round",
+        "attack rounds": "attack round",
+        "defense rounds": "defense round",
+        "death rounds": "death-round",
+        "opening death rounds": "opening-death round",
+        "rounds with vandal or phantom": "Vandal-or-Phantom round",
         "round after pistol round win": "round after winning pistol round",
-        "matches started within 10 minutes of last": "matches started within 10 minutes of last match",
+        "matches started within 10 minutes of last": "match started within 10 minutes of last match",
     }
     return labels.get(baseline, str(baseline).replace("_", " "))
+
+# Calculates distance between 2 sets of coordinates
+def coordinates_to_distance(x1, y1, x2, y2):
+    units = ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5
+    metres = units / 100
+    return metres
 
 # Dynamically converts the statistical outputs of each insight into easily readable summaries
 def build_summary_text(insight):
@@ -144,52 +162,61 @@ def build_summary_text(insight):
 
     if group_by == "money spent after winning pistol round" or insight["baseline"] == "round after pistol round win":
         if significance == "positive":
-            text = "This player wins more rounds after spending 1500 or fewer credits following a pistol-round win than they do after spending more than 1500"
+            text = "This player has a higher round winrate after spending 1500 or fewer credits following a pistol-round win than after spending more than 1500"
         elif significance == "negative":
-            text = "This player wins fewer rounds after spending 1500 or fewer credits following a pistol-round win than they do after spending more than 1500"
+            text = "This player has a lower round winrate after spending 1500 or fewer credits following a pistol-round win than after spending more than 1500"
         else:
-            text = "This player wins about the same number of rounds after spending 1500 or fewer credits following a pistol-round win as they do after spending more than 1500"
+            text = "This player has about the same round winrate after spending 1500 or fewer credits following a pistol-round win as after spending more than 1500"
 
 
     elif "minutes of win or loss" in group_by or "minutes of last match" in insight["baseline"]:
         if significance == "positive":
-            text = "This player wins more matches when starting the next game within 10 minutes of a win than they do when starting the next game within 10 minutes of a loss"
+            text = "This player has a higher match winrate when starting the next game within 10 minutes of a win than when starting the next game within 10 minutes of a loss"
         elif significance == "negative":
-            text = "This player wins fewer matches when starting the next game within 10 minutes of a win than they do when starting the next game within 10 minutes of a loss"
+            text = "This player has a lower match winrate when starting the next game within 10 minutes of a win than when starting the next game within 10 minutes of a loss"
         else:
-            text = "This player wins about the same number of matches when starting the next game within 10 minutes of a win as they do when starting the next game within 10 minutes of a loss"
+            text = "This player has about the same match winrate when starting the next game within 10 minutes of a win as when starting the next game within 10 minutes of a loss"
 
     elif group_by == "map":
         if significance == "positive":
-            text = f"This player wins more {stat_a} than they do on other maps"
+            text = f"This player has a higher {baseline} winrate for {stat_a} than on other maps"
         elif significance == "negative":
-            text = f"This player wins fewer {stat_a} than they do on other maps"
+            text = f"This player has a lower {baseline} winrate for {stat_a} than on other maps"
         else:
-            text = f"This player wins about the same number of {stat_a} as they do on other maps"
+            text = f"This player has about the same {baseline} winrate for {stat_a} as on other maps"
+
+    elif group_by == "traded death":
+        if significance == "positive":
+            text = "This player has a higher death-round winrate when they are traded within 3 seconds than when they are not"
+        elif significance == "negative":
+            text = "This player has a lower death-round winrate when they are traded within 3 seconds than when they are not"
+        else:
+            text = "This player has about the same death-round winrate when they are traded within 3 seconds as when they are not"
+
 
     elif group_by == "agent":
         if significance == "positive":
-            text = f"This player wins more {stat_a} than they do on other agents"
+            text = f"This player has a higher {baseline} winrate for {stat_a} than on other agents"
         elif significance == "negative":
-            text = f"This player wins fewer {stat_a} than they do on other agents"
+            text = f"This player has a lower {baseline} winrate for {stat_a} than on other agents"
         else:
-            text = f"This player wins about the same number of {stat_a} as they do on other agents"
+            text = f"This player has about the same {baseline} winrate for {stat_a} as on other agents"
 
     elif group_by == "weapon":
         if significance == "positive":
-            text = f"This player wins more {stat_a} than they do with other weapons"
+            text = f"This player has a higher {baseline} winrate for {stat_a} than with other weapons"
         elif significance == "negative":
-            text = f"This player wins fewer {stat_a} than they do with other weapons"
+            text = f"This player has a lower {baseline} winrate for {stat_a} than with other weapons"
         else:
-            text = f"This player wins about the same number of {stat_a} as they do with other weapons"
+            text = f"This player has about the same {baseline} winrate for {stat_a} as with other weapons"
 
     elif group_by == "role":
         if significance == "positive":
-            text = f"This player wins more {stat_a} than they do on other roles"
+            text = f"This player has a higher {baseline} winrate for {stat_a} than on other roles"
         elif significance == "negative":
-            text = f"This player wins fewer {stat_a} than they do on other roles"
+            text = f"This player has a lower {baseline} winrate for {stat_a} than on other roles"
         else:
-            text = f"This player wins about the same number of {stat_a} as they do on other roles"
+            text = f"This player has about the same {baseline} winrate for {stat_a} as on other roles"
 
     elif group_by == "solo_queue":
         if stat_a:
@@ -200,11 +227,11 @@ def build_summary_text(insight):
             comparison = "when solo queueing"
 
         if significance == "positive":
-            text = f"This player wins more {baseline} {subject} than they do {comparison}"
+            text = f"This player has a higher {baseline} winrate {subject} than {comparison}"
         elif significance == "negative":
-            text = f"This player wins fewer {baseline} {subject} than they do {comparison}"
+            text = f"This player has a lower {baseline} winrate {subject} than {comparison}"
         else:
-            text = f"This player wins about the same number of {baseline} {subject} as they do {comparison}"
+            text = f"This player has about the same {baseline} winrate {subject} as {comparison}"
 
     elif group_by == "took_opening_duel":
         if stat_a:
@@ -215,11 +242,11 @@ def build_summary_text(insight):
             comparison = "when they do"
 
         if significance == "positive":
-            text = f"This player wins more {baseline} {subject} than they do {comparison}"
+            text = f"This player has a higher {baseline} winrate {subject} than {comparison}"
         elif significance == "negative":
-            text = f"This player wins fewer {baseline} {subject} than they do {comparison}"
+            text = f"This player has a lower {baseline} winrate {subject} than {comparison}"
         else:
-            text = f"This player wins about the same number of {baseline} {subject} as they do {comparison}"
+            text = f"This player has about the same {baseline} winrate {subject} as {comparison}"
 
     elif group_by == "traded":
         if stat_a:
@@ -230,11 +257,11 @@ def build_summary_text(insight):
             comparison = "when they are"
 
         if significance == "positive":
-            text = f"This player wins more {baseline} {subject} than they do {comparison}"
+            text = f"This player has a higher {baseline} winrate {subject} than {comparison}"
         elif significance == "negative":
-            text = f"This player wins fewer {baseline} {subject} than they do {comparison}"
+            text = f"This player has a lower {baseline} winrate {subject} than {comparison}"
         else:
-            text = f"This player wins about the same number of {baseline} {subject} as they do {comparison}"
+            text = f"This player has about the same {baseline} winrate {subject} as {comparison}"
 
     elif group_by == "vandal vs phantom":
         if stat_a:
@@ -245,11 +272,11 @@ def build_summary_text(insight):
             comparison = "rounds started with a Vandal"
 
         if significance == "positive":
-            text = f"This player wins more {subject} than they do {comparison}"
+            text = f"This player has a higher {baseline} winrate for {subject} than for {comparison}"
         elif significance == "negative":
-            text = f"This player wins fewer {subject} than they do {comparison}"
+            text = f"This player has a lower {baseline} winrate for {subject} than for {comparison}"
         else:
-            text = f"This player wins about the same number of {subject} as they do {comparison}"
+            text = f"This player has about the same {baseline} winrate for {subject} as for {comparison}"
 
     elif group_by == "time":
         if stat_a:
@@ -260,20 +287,20 @@ def build_summary_text(insight):
             comparison = "when they play during these hours"
 
         if significance == "positive":
-            text = f"This player wins more {stat_a} than {comparison}"
+            text = f"This player has a higher {baseline} winrate for {stat_a} than {comparison}"
         elif significance == "negative":
-            text = f"This player wins fewer {stat_a} than {comparison}"
+            text = f"This player has a lower {baseline} winrate for {stat_a} than {comparison}"
         else:
-            text = f"This player wins about the same number of {stat_a} as they do {comparison}"
+            text = f"This player has about the same {baseline} winrate for {stat_a} as {comparison}"
 
     else:
         label = str(stat_a if stat_a is not None else value).replace("_", " ")
         if significance == "positive":
-            text = f"This player wins more {baseline} for {label}"
+            text = f"This player has a higher {baseline} winrate for {label}"
         elif significance == "negative":
-            text = f"This player wins fewer {baseline} for {label}"
+            text = f"This player has a lower {baseline} winrate for {label}"
         else:
-            text = f"This player wins about the same number of {baseline} for {label}"
+            text = f"This player has about the same {baseline} winrate for {label}"
 
     if low_sample:
         text += " (low sample)."

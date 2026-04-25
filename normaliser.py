@@ -2,10 +2,24 @@ import helpers
 import data_loader
 from datetime import datetime
 
+def distance_bucket(distance):
+    if distance is None:
+        return None
+    if distance <= 5:
+        return "0-5m"
+    if distance <= 10:
+        return "5-10m"
+    if distance <= 20:
+        return "10-20m"
+    return "20m+"
+
 # Builds a list of match dicts
 def build_match_rows(match_data_path, puuid_data_path):
     match_rows = []
-    matches_list = data_loader.load_match_data(match_data_path)
+    matches_list = sorted(
+        data_loader.load_match_data(match_data_path),
+        key=lambda match: match["matchInfo"]["gameStartMillis"]
+    )
     target_puuid = data_loader.load_target_puuid(puuid_data_path)
 
     for match in matches_list:
@@ -15,6 +29,8 @@ def build_match_rows(match_data_path, puuid_data_path):
                     "match_id": match["matchInfo"]["matchId"],
                     "started_at": match["matchInfo"]["gameStartMillis"],
                     "ended_at": match["matchInfo"]["gameStartMillis"] + match["matchInfo"]["gameLengthMillis"],
+                    "fast_requeue_after_loss": False,
+                    "fast_requeue_after_win": False,
                     "hour": int(datetime.fromtimestamp(int(match["matchInfo"]["gameStartMillis"]) / 1000).strftime("%H")),
                     "time": None,
                     "map": helpers.map_url_to_display_name(match["matchInfo"]["mapId"]),
@@ -36,6 +52,16 @@ def build_match_rows(match_data_path, puuid_data_path):
                     "rounds_played": player["stats"]["roundsPlayed"],
                     "abilities": player["stats"]["abilityCasts"],
                 }
+
+                if match_rows:
+                    previous_match = match_rows[-1]
+                    gap = match_row["started_at"] - previous_match["ended_at"]
+
+                    if gap < 10 * 60 * 1000:
+                        if previous_match["won"]:
+                            match_row["fast_requeue_after_win"] = True
+                        else:
+                            match_row["fast_requeue_after_loss"] = True
 
                 if 0 <= match_row["hour"] < 6:
                     match_row["time"] = "00-06"
@@ -172,22 +198,30 @@ def build_round_rows(match_data_path, puuid_data_path):
                         "score": None,
                         "took_opening_duel": True if round["firstBloodPlayer"] == target_puuid else False,
                         "won_opening_duel": True if round["firstBloodPlayer"] == target_puuid else False,
+                        "first_death_location": None,
+                        "teammate_locations_at_first_death": [],
+                        "first_death_nearest_teammate_distance": None,
+                        "first_death_nearest_teammate_distance_bucket": None,
+                        "death_locations": [],
+                        "teammate_locations_at_death": [],
+                        "death_nearest_teammate_distance": None,
+                        "death_nearest_teammate_distance_bucket": None,
                         "traded": False,
                         "money_before_buy": None,
                         "money_spent": None,
                         "money_remaining": None,
                         "loadout_value": None,
+                        "money_spent_after_pistol_round_win": None,
                         "enemy_team_loadout_value": 0,
                         "weapon": None,
                         "weapon_id": None,
-                        "armour_name": None,
+                        "armour": None,
                         "armour_id": None,
                         "kill_weapon_ids": [],
                         "kill_weapon_names": [],
                         "death_weapon_ids": [],
                         "death_weapon_names": [],
                         "was_afk": None,
-                        "rating_context": {}
                     }
 
                     death_times = []
@@ -198,6 +232,10 @@ def build_round_rows(match_data_path, puuid_data_path):
                         if player3["subject"] not in match_info["teammates"] and player3["subject"] == round["firstBloodPlayer"]:
                             if player3["kills"][0]["victim"] == target_puuid:
                                 round_row["took_opening_duel"] = True
+                                round_row["first_death_location"] = player3["kills"][0]["victimLocation"]
+                                for player4 in player3["kills"][0]["playerLocations"]:
+                                    if player4["subject"] in match_info["teammates"]:
+                                        round_row["teammate_locations_at_first_death"].append(player4["location"])
                             else:
                                 round_row["took_opening_duel"] = False
 
@@ -210,11 +248,19 @@ def build_round_rows(match_data_path, puuid_data_path):
                             for kill in player3["kills"]:
                                 if kill["victim"] == target_puuid:
                                     round_row["deaths"] += 1
+                                    round_row["death_locations"].append(kill["victimLocation"])
                                     death_times.append(kill["gameTime"])
                                     killers.append(kill["killer"])
                                     round_row["death_weapon_ids"].append(kill["finishingDamage"]["damageItem"])
+                                    locs = []
+                                    for loc in kill["playerLocations"]:
+                                        if loc["subject"] in match_info["teammates"]:
+                                            locs.append(loc["location"])
+                                    round_row["teammate_locations_at_death"].append(locs)
+
                                 if target_puuid in kill["assistants"] and kill["victim"] not in match_info["teammates"]:
                                     round_row["assists"] += 1
+
                         # Tallies the player's received damage, legshots, bodyshots, and headshots
                         if player3["damage"]:
                             if player3["damage"]:
@@ -255,7 +301,7 @@ def build_round_rows(match_data_path, puuid_data_path):
                             round_row["money_before_buy"] = player3["economy"]["spent"] + player3["economy"]["remaining"]
 
                             round_row["weapon"] = helpers.uuid_to_display_name(round_row["weapon_id"])
-                            round_row["armour_name"] = helpers.uuid_to_display_name(round_row["armour_id"])
+                            round_row["armour"] = helpers.uuid_to_display_name(round_row["armour_id"])
 
                             for weapon in round_row["kill_weapon_ids"]:
                                 round_row["kill_weapon_names"].append(helpers.uuid_to_display_name(weapon))
@@ -275,6 +321,45 @@ def build_round_rows(match_data_path, puuid_data_path):
                                             if kill["victim"] == killers[index]:
                                                 if (kill["gameTime"] - death) < 3000:
                                                     round_row["traded"] = True
+
+                    # Calculates how far away nearest teammate was when the player died first
+                    if round_row["took_opening_duel"] == True and round_row["won_opening_duel"] == False:
+                        nearest_teammate_distance = 99999999999
+                        for teammate_position in round_row["teammate_locations_at_first_death"]:
+                            teammate_distance = helpers.coordinates_to_distance(
+                                round_row["first_death_location"]["x"],
+                                round_row["first_death_location"]["y"],
+                                teammate_position["x"],
+                                teammate_position["y"]
+                            )
+                            if teammate_distance < nearest_teammate_distance:
+                                round_row["first_death_nearest_teammate_distance"] = teammate_distance
+                                nearest_teammate_distance = teammate_distance
+                        round_row["first_death_nearest_teammate_distance_bucket"] = distance_bucket(
+                            round_row["first_death_nearest_teammate_distance"]
+                        )
+
+                    # Calculates how far away nearest teammate was when the player died
+                    nearest_teammate_distance = 99999999999
+                    if round_row["deaths"] >= 1 and round_row["teammate_locations_at_death"]:
+                        for teammate_position in round_row["teammate_locations_at_death"][0]:
+                            teammate_distance = helpers.coordinates_to_distance(
+                                round_row["death_locations"][0]["x"],
+                                round_row["death_locations"][0]["y"],
+                                teammate_position["x"],
+                                teammate_position["y"]
+                            )
+                            if teammate_distance < nearest_teammate_distance:
+                                round_row["death_nearest_teammate_distance"] = teammate_distance
+                                nearest_teammate_distance = teammate_distance
+                        round_row["death_nearest_teammate_distance_bucket"] = distance_bucket(
+                            round_row["death_nearest_teammate_distance"]
+                        )
+
+                    # Logs how much money was spent on the round after winning pistol round
+                    if round_row["round_number"] in [2, 14]:
+                        if round_rows[-1]["won"]:
+                            round_row["money_spent_after_pistol_round_win"] = round_row["money_spent"]
 
                     round_rows.append(round_row)
         continue
